@@ -4,14 +4,6 @@ textarea {
   width: 100%;
 }
 
-output-area h2 {
-  display: none;
-}
-
-output-area.no-crypto h2 {
-  display: block;
-}
-
 .no-crypto textarea {
   background-color: red;
 }

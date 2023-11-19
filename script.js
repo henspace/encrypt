@@ -1,51 +1,30 @@
 const IV_LEN = 12;
 const MIN_KEY_LEN = 8;
 const ENCRYPTED_DATA_TAG = "!39867!"; // Don't include any regex control characters here.
+const SALT = "encryptDecryptData";
 var subtleCrypto;
 
-/**
- * Dummy class just used for testing the UI in an non-secure context.
- */
-class DummySubtleCrypto {
-  /**
-   *
-   * @param {Object} algorithm
-   * @param {*} key
-   * @param {*} data
-   */
-  encrypt(algorithm, key, data) {
-    alert("WARNING! Data not actually encrypted. Test only.");
-    return Promise.resolve(data);
-  }
-
-  decrypt(algorithm, key, data) {
-    return Promise.resolve(data);
-  }
-}
-
 try {
-  subtleCrypto = window.Crypto.subtle;
+  subtleCrypto = window.crypto.subtle;
   if (!subtleCrypto) {
     throw new Error("Crypto subtle property not available.");
   }
 } catch (err) {
   console.log(`Cannot use Web Api Crypto module. ${err}`);
-  alert(
-    "Crypto module not available. Dummy encryption undertaken for testing the UI only."
-  );
-  subtleCrypto = new DummySubtleCrypto();
-  document.getElementById("output-area").classList.add("no-crypto");
+  document.body.innerHTML =
+    '<div class="error"><p>Sorry but the cryptographic routines are not available on this device.</p></div>';
 }
 
 /**
  * Perform the actual conversion
  */
-function convert() {
+async function convert() {
   const inputText = document.getElementById("text-in").value;
-  const key = document.getElementById("key").value;
-  if (!isKeyValid(key)) {
+  const password = document.getElementById("password").value;
+  if (!isPasswordValid(password)) {
     return;
   }
+  const key = await generateKey(password);
   const textToDecrypt = extractTextToDecrypt(inputText);
   if (textToDecrypt) {
     decryptText(textToDecrypt, key, document.getElementById("text-out"));
@@ -56,18 +35,48 @@ function convert() {
 
 /**
  * Check if key valid.
- * @param {string} key
+ * @param {string} password
  * @returns {boolean}
  */
-function isKeyValid(key) {
-  if (!key || key.length < MIN_KEY_LEN) {
+function isPasswordValid(password) {
+  if (!password || password.length < MIN_KEY_LEN) {
     alert(`The key must be at least ${MIN_KEY_LEN} characters long!`);
     return false;
   }
-  if (!key || key.trim().length != key.length) {
+  if (!password || password.trim().length != password.length) {
     alert(`The key cannot have leading or trailing spaces!`);
   }
   return true;
+}
+
+/**
+ * Generate crypto key from password
+ * @param {string} password
+ * @returns  {CryptoKey}
+ */
+function generateKey(password) {
+  return subtleCrypto
+    .importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, [
+      "deriveBits",
+      "deriveKey",
+    ])
+    .then((keyMaterial) =>
+      subtleCrypto.deriveKey(
+        {
+          name: "PBKDF2",
+          hash: "SHA-256",
+          salt: new TextEncoder().encode(SALT),
+          iterations: 1000,
+        },
+        keyMaterial,
+        {
+          name: "AES-GCM",
+          length: 256,
+        },
+        false,
+        ["encrypt", "decrypt"]
+      )
+    );
 }
 
 /**
@@ -97,7 +106,8 @@ async function encryptText(inputText, key, elementOut) {
     encoded
   );
   elementOut.value =
-    ENCRYPTED_DATA_TAG + uint8ArrayToBase64(concatUint8Array(iv, cipherText));
+    ENCRYPTED_DATA_TAG +
+    uint8ArrayToBase64(concatUint8Array(iv, new Uint8Array(cipherText)));
 }
 
 /**
@@ -106,7 +116,7 @@ async function encryptText(inputText, key, elementOut) {
  * @param {string} key
  * @param {Element} elementOut - output element
  */
-async function decryptText(inputText, ke, elementOut) {
+async function decryptText(inputText, key, elementOut) {
   const bytes = base64ToBytes(inputText);
   const ivBytes = bytes.slice(0, IV_LEN);
   const cipherText = bytes.slice(IV_LEN);
@@ -147,7 +157,7 @@ function uint8ArrayToBase64(bytes) {
 /**
  *
  * @param {Uint8Array} arrA
- * @param {Uint8Array} arrB
+ * @param {Uint8Buffer} arrB
  * @returns {Uint8Array}
  */
 function concatUint8Array(arrA, arrB) {
