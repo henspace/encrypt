@@ -1,6 +1,5 @@
 const IV_LEN = 12;
 const MIN_KEY_LEN = 8;
-const ENCRYPTED_DATA_TAG = "!39867!"; // Don't include any regex control characters here.
 const SALT = "encryptDecryptData";
 var subtleCrypto;
 
@@ -16,21 +15,52 @@ try {
 }
 
 /**
- * Perform the actual conversion
+ * Encrypt or decrypt
+ * @param {string} direction - 'encrypt' or 'decrypt'
  */
-async function convert() {
+async function convert(direction) {
+  document.getElementById("text-out").value = "";
   const inputText = document.getElementById("text-in").value;
   const password = document.getElementById("password").value;
-  if (!isPasswordValid(password)) {
+  if (!inputText || !isPasswordValid(password)) {
     return;
   }
   const key = await generateKey(password);
-  const textToDecrypt = extractTextToDecrypt(inputText);
-  if (textToDecrypt) {
-    decryptText(textToDecrypt, key, document.getElementById("text-out"));
-  } else {
-    encryptText(inputText, key, document.getElementById("text-out"));
+
+  preventEditing();
+  if (direction === "encrypt") {
+    return encryptText(
+      inputText,
+      key,
+      document.getElementById("text-out")
+    ).then(() => allowEditing());
+  } else if (direction === "decrypt") {
+    decryptText(
+      inputText.trim(),
+      key,
+      document.getElementById("text-out")
+    ).then(() => allowEditing());
   }
+}
+
+/**
+ * Prevent editing
+ */
+function preventEditing() {
+  document.getElementById("text-in").setAttribute("readonly", true);
+  document.getElementById("password").setAttribute("readonly", true);
+  document.getElementById("encrypt-button").disabled = true;
+  document.getElementById("decrypt-button").disabled = true;
+}
+
+/**
+ * Allow editing
+ */
+function allowEditing() {
+  document.getElementById("text-in").removeAttribute("readonly");
+  document.getElementById("password").removeAttribute("readonly");
+  document.getElementById("encrypt-button").disabled = false;
+  document.getElementById("decrypt-button").disabled = false;
 }
 
 /**
@@ -52,7 +82,7 @@ function isPasswordValid(password) {
 /**
  * Generate crypto key from password
  * @param {string} password
- * @returns  {CryptoKey}
+ * @returns  {Promise} Fulfils to CryptoKey
  */
 function generateKey(password) {
   return subtleCrypto
@@ -86,8 +116,7 @@ function generateKey(password) {
  * @returns {string} null if not to be decoded.
  */
 function extractTextToDecrypt(inputText) {
-  const regex = new RegExp(ENCRYPTED_DATA_TAG + "s*([A-Za-z0-9+/]+={0,2})s*");
-  const matches = inputText.match(regex);
+  const matches = inputText.match(/\s*([A-Za-z0-9+/]+={0,2})\s*/);
   return matches ? matches[1] : null;
 }
 
@@ -96,18 +125,25 @@ function extractTextToDecrypt(inputText) {
  * @param {string} inputText - text to encrypt
  * @param {string} key - encryption key
  * @param {Element} elementOut - output element
+ * @returns {Promise} fulfils true if okay else false.
  */
 async function encryptText(inputText, key, elementOut) {
   const encoded = new TextEncoder().encode(inputText);
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const cipherText = await subtleCrypto.encrypt(
-    { name: "AES-GCM", iv: iv },
-    key,
-    encoded
-  );
-  elementOut.value =
-    ENCRYPTED_DATA_TAG +
-    uint8ArrayToBase64(concatUint8Array(iv, new Uint8Array(cipherText)));
+  return subtleCrypto
+    .encrypt({ name: "AES-GCM", iv: iv }, key, encoded)
+    .then((cipherText) => {
+      elementOut.value = uint8ArrayToBase64(
+        concatUint8Array(iv, new Uint8Array(cipherText))
+      );
+      return true;
+    })
+    .catch((err) => {
+      alert(
+        `Cannot encrypt text. The password or encrypted text may be invalid. ${err}`
+      );
+      return false;
+    });
 }
 
 /**
@@ -115,23 +151,33 @@ async function encryptText(inputText, key, elementOut) {
  * @param {string} inputText - text to decrypt
  * @param {string} key
  * @param {Element} elementOut - output element
+ * @returns {Promise} fulfils true if okay else false.
  */
 async function decryptText(inputText, key, elementOut) {
   const bytes = base64ToBytes(inputText);
   const ivBytes = bytes.slice(0, IV_LEN);
   const cipherText = bytes.slice(IV_LEN);
 
-  const decrypted = await subtleCrypto.decrypt(
-    {
-      name: "AES-GCM",
-      iv: ivBytes,
-    },
-    key,
-    cipherText
-  );
-
-  const decoded = new TextDecoder().decode(decrypted);
-  elementOut.value = decoded;
+  return subtleCrypto
+    .decrypt(
+      {
+        name: "AES-GCM",
+        iv: ivBytes,
+      },
+      key,
+      cipherText
+    )
+    .then((decrypted) => {
+      const decoded = new TextDecoder().decode(decrypted);
+      elementOut.value = decoded;
+      return true;
+    })
+    .catch((err) => {
+      alert(
+        `Cannot decrypt text. The password or encrypted text may be invalid. ${err}`
+      );
+      return false;
+    });
 }
 
 /**

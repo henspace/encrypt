@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+  <script>
+    // Set ENCRYPTED_TEXT to default value to decrypt
+    var ENCRYPTED_TEXT;
+  </script>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cryptography module</title>
+    <style>
+      body {
+        background-color: aliceblue;
+        font-family: Verdana, Geneva, Tahoma, sans-serif;
+      }
+      textarea {
+        box-sizing: border-box;
+        height: 25vh;
+        width: 100%;
+      }
+
+      #password {
+        box-sizing: border-box;
+        width: 100%;
+      }
+
+      #button-bar {
+        display: flex;
+        justify-content: center;
+        padding: 1em;
+      }
+
+      .no-crypto textarea {
+        background-color: red;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Simple AES256 encryption and decryption</h1>
+    <noscript>
+      <p>
+        Javascript must be enabled to use this form. If you are previewing the
+        file, try downloading it first and then opening the file in the Chrome
+        browser.
+      </p>
+    </noscript>
+    <div id="main-container">
+      <p class="'disclaimer">
+        This page is for test purposes only. It is made available WITHOUT ANY
+        WARRANTY; without even the implied warranty of MERCHANTABILITY or
+        FITNESS FOR A PARTICULAR PURPOSE.
+      </p>
+      <div id="input-area">
+        <label>
+          Input text:
+          <textarea
+            id="text-in"
+            rows="4"
+            cols="50"
+            placeholder="Enter text to encrypt or encrypted text here."
+          ></textarea>
+        </label>
+        <label>
+          Password:
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter the password here."
+          />
+        </label>
+      </div>
+      <div id="button-bar">
+        <button id="encrypt-button" onclick="convert('encrypt');">
+          Encrypt
+        </button>
+        <button id="decrypt-button" onclick="convert('decrypt');">
+          Decrypt
+        </button>
+      </div>
+      <div id="output-area">
+        <label>
+          Output text:
+          <textarea
+            id="text-out"
+            readonly
+            rows="4"
+            cols="50"
+            placeholder="Encrypted or decrypted text appears here."
+          ></textarea>
+        </label>
+      </div>
+    </div>
+    <div id="footer">
+      <p>
+        Encrypt-decrypt code available at
+        <a href="https://github.com/henspace/encrypt">Github</a>
+      </p>
+    </div>
+  </body>
+  <script>
+    const IV_LEN = 12;
+    const MIN_PASSWORD_LEN = 8;
+    const SALT = "encryptDecryptData";
+    var subtleCrypto;
+
+    if (!window.isSecureContext) {
+      disableForm(
+        "Sorry, but this page must be run in a secure context. " +
+          "That is as a local file or via https. " +
+          "Try downloading to your device and opening in the Chrome browser."
+      );
+    } else if (!window.crypto?.subtle) {
+      disableForm(
+        "Sorry, but cryptographic routines are not available in this browser. " +
+          "Try downloading to your device and opening in the Chrome browser."
+      );
+    } else {
+      subtleCrypto = window.crypto.subtle;
+      if (ENCRYPTED_TEXT) {
+        const inputElement = document.getElementById("text-in");
+        inputElement.value = ENCRYPTED_TEXT;
+        inputElement.setAttribute("readonly", true);
+        document.getElementById("encrypt-button").disabled = true;
+      }
+    }
+
+    /**
+     * Mark the page as unusable.
+     * @param {string} message
+     */
+    function disableForm(message) {
+      document.getElementById(
+        "main-container"
+      ).innerHTML = `<div class="error"><p>${message}</p></div>`;
+    }
+
+    /**
+     * Encrypt or decrypt
+     * @param {string} direction - 'encrypt' or 'decrypt'
+     */
+    async function convert(direction) {
+      document.getElementById("text-out").value = "";
+      const inputText = document.getElementById("text-in").value;
+      const password = document.getElementById("password").value;
+      if (!inputText || !isPasswordValid(password)) {
+        return;
+      }
+      const key = await generateKey(password);
+      const iv = await generateIv(password);
+
+      preventEditing();
+      if (direction === "encrypt") {
+        return encryptText(
+          inputText,
+          iv,
+          key,
+          document.getElementById("text-out")
+        ).then(() => allowEditing());
+      } else if (direction === "decrypt") {
+        decryptText(
+          inputText.trim(),
+          iv,
+          key,
+          document.getElementById("text-out")
+        ).then(() => allowEditing());
+      }
+    }
+
+    /**
+     * Prevent editing
+     */
+    function preventEditing() {
+      document.getElementById("text-in").setAttribute("readonly", true);
+      document.getElementById("password").setAttribute("readonly", true);
+      document.getElementById("encrypt-button").disabled = true;
+      document.getElementById("decrypt-button").disabled = true;
+    }
+
+    /**
+     * Allow editing
+     */
+    function allowEditing() {
+      document.getElementById("text-in").removeAttribute("readonly");
+      document.getElementById("password").removeAttribute("readonly");
+      document.getElementById("encrypt-button").disabled = false;
+      document.getElementById("decrypt-button").disabled = false;
+    }
+
+    /**
+     * Check if key valid.
+     * @param {string} password
+     * @returns {boolean}
+     */
+    function isPasswordValid(password) {
+      if (!password || password.length < MIN_PASSWORD_LEN) {
+        alert(
+          `The password must be at least ${MIN_PASSWORD_LEN} characters long!`
+        );
+        return false;
+      }
+      if (!password || password.trim().length != password.length) {
+        alert(`The password cannot have leading or trailing spaces!`);
+      }
+      return true;
+    }
+
+    /**
+     * Generate iv from password.
+     * @param {string} password
+     * @returns {Promise} fulfils to Uint8Array
+     */
+    function generateIv(password) {
+      return subtleCrypto
+        .digest("SHA-256", new TextEncoder().encode(password))
+        .then((digest) => {
+          const iv = new Uint8Array(digest.slice(0, 16));
+          return iv;
+        });
+    }
+    /**
+     * Generate crypto key from password
+     * @param {string} password
+     * @returns  {Promise} Fulfils to CryptoKey
+     */
+    function generateKey(password) {
+      return subtleCrypto
+        .importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, [
+          "deriveBits",
+          "deriveKey",
+        ])
+        .then((keyMaterial) =>
+          subtleCrypto.deriveKey(
+            {
+              name: "PBKDF2",
+              hash: "SHA-256",
+              salt: new TextEncoder().encode(SALT),
+              iterations: 1000,
+            },
+            keyMaterial,
+            {
+              name: "AES-GCM",
+              length: 256,
+            },
+            false,
+            ["encrypt", "decrypt"]
+          )
+        );
+    }
+
+    /**
+     * Look to see if input should be decoded. Leading and trailing whitespace
+     * is ignored. The remaining text must be valid base64.
+     * @param {string} inputText
+     * @returns {string} null if not to be decoded.
+     */
+    function extractTextToDecrypt(inputText) {
+      const matches = inputText.match(/\s*([A-Za-z0-9+/]+={0,2})\s*/);
+      return matches ? matches[1] : null;
+    }
+
+    /**
+     * Encrypt text.
+     * @param {string} inputText - text to encrypt
+     * @param {string} iv - initialisation vector
+     * @param {string} key - encryption key
+     * @param {Element} elementOut - output element
+     * @returns {Promise} fulfils true if okay else false.
+     */
+    async function encryptText(inputText, iv, key, elementOut) {
+      const encoded = new TextEncoder().encode(inputText);
+      return subtleCrypto
+        .encrypt({ name: "AES-GCM", iv: iv }, key, encoded)
+        .then((cipherText) => {
+          elementOut.value = uint8ArrayToBase64(new Uint8Array(cipherText));
+          return true;
+        })
+        .catch((err) => {
+          alert(
+            `Cannot encrypt text. The password or encrypted text may be invalid. ${err}`
+          );
+          return false;
+        });
+    }
+
+    /**
+     * Decrypt text.
+     * @param {string} inputText - text to decrypt
+     * @param {string} iv
+     * @param {string} key
+     * @param {Element} elementOut - output element
+     * @returns {Promise} fulfils true if okay else false.
+     */
+    async function decryptText(inputText, iv, key, elementOut) {
+      const cipherText = base64ToBytes(inputText);
+      if (!cipherText) {
+        return Promise.resolve(false);
+      }
+
+      return subtleCrypto
+        .decrypt(
+          {
+            name: "AES-GCM",
+            iv: iv,
+          },
+          key,
+          cipherText
+        )
+        .then((decrypted) => {
+          const decoded = new TextDecoder().decode(decrypted);
+          elementOut.value = decoded;
+          return true;
+        })
+        .catch((err) => {
+          alert(
+            `Cannot decrypt text. The password or encrypted text may be invalid. ${err}`
+          );
+          return false;
+        });
+    }
+
+    /**
+     * Convert base64 to array.
+     * @param {string} base64
+     * @returns {Uint8Array}
+     */
+    function base64ToBytes(base64) {
+      try {
+        const binString = atob(base64);
+        return Uint8Array.from(binString, (m) => m.codePointAt(0));
+      } catch (err) {
+        alert(`Input text does not appear to be correctly encrypted. ${err}`);
+        return null;
+      }
+    }
+
+    /**
+     * Convert array to base64 string
+     * @param {Uint8Array} bytes
+     * @returns {string}
+     */
+    function uint8ArrayToBase64(bytes) {
+      const binString = String.fromCodePoint(...bytes);
+      return btoa(binString);
+    }
+  </script>
+</html>
