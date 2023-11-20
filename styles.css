@@ -1,9 +1,0 @@
-textarea {
-  box-sizing: border-box;
-  height: 25vh;
-  width: 100%;
-}
-
-.no-crypto textarea {
-  background-color: red;
-}

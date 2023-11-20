@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cryptography module</title>
+    <title>Simple encryption and decryption</title>
     <style>
       body {
         background-color: aliceblue;
@@ -37,7 +37,7 @@
   </head>
 
   <body>
-    <h1>Simple AES256 encryption and decryption</h1>
+    <h1>Simple encryption and decryption</h1>
     <noscript>
       <p>
         Javascript must be enabled to use this form. If you are previewing the
@@ -45,7 +45,7 @@
         browser.
       </p>
     </noscript>
-    <div id="main-container">
+    <div id="main-container" style="display: none">
       <p class="'disclaimer">
         This page is for test purposes only. It is made available WITHOUT ANY
         WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -99,29 +99,38 @@
     </div>
   </body>
   <script>
-    const IV_LEN = 12;
+    const IV_BYTE_LEN = 16;
+    const IV_SEPARATOR = "$";
     const MIN_PASSWORD_LEN = 8;
-    const SALT = "encryptDecryptData";
+    const SALT = "f85981d89406b6ef0bbe40846aeadb7e";
     var subtleCrypto;
 
-    if (!window.isSecureContext) {
-      disableForm(
-        "Sorry, but this page must be run in a secure context. " +
-          "That is as a local file or via https. " +
-          "Try downloading to your device and opening in the Chrome browser."
-      );
-    } else if (!window.crypto?.subtle) {
-      disableForm(
-        "Sorry, but cryptographic routines are not available in this browser. " +
-          "Try downloading to your device and opening in the Chrome browser."
-      );
-    } else {
-      subtleCrypto = window.crypto.subtle;
-      if (ENCRYPTED_TEXT) {
-        const inputElement = document.getElementById("text-in");
-        inputElement.value = ENCRYPTED_TEXT;
-        inputElement.setAttribute("readonly", true);
-        document.getElementById("encrypt-button").disabled = true;
+    window.addEventListener("load", () => initialise());
+
+    /**
+     * Initialise the form.
+     */
+    function initialise() {
+      if (!window.isSecureContext) {
+        disableForm(
+          "Sorry, but this page must be run in a secure context. " +
+            "That is as a local file or via https. " +
+            "Try downloading to your device and opening in the Chrome browser."
+        );
+      } else if (!window.crypto?.subtle) {
+        disableForm(
+          "Sorry, but cryptographic routines are not available in this browser. " +
+            "Try downloading to your device and opening in the Chrome browser."
+        );
+      } else {
+        subtleCrypto = window.crypto.subtle;
+        if (ENCRYPTED_TEXT) {
+          const inputElement = document.getElementById("text-in");
+          inputElement.value = ENCRYPTED_TEXT;
+          inputElement.setAttribute("readonly", true);
+          document.getElementById("encrypt-button").disabled = true;
+        }
+        document.getElementById("main-container").style.display = "block";
       }
     }
 
@@ -140,30 +149,31 @@
      * @param {string} direction - 'encrypt' or 'decrypt'
      */
     async function convert(direction) {
-      document.getElementById("text-out").value = "";
-      const inputText = document.getElementById("text-in").value;
-      const password = document.getElementById("password").value;
-      if (!inputText || !isPasswordValid(password)) {
-        return;
-      }
-      const key = await generateKey(password);
-      const iv = await generateIv(password);
+      try {
+        document.getElementById("text-out").value = "";
+        const inputText = document.getElementById("text-in").value;
+        const password = document.getElementById("password").value;
+        if (!inputText || !isPasswordValid(password)) {
+          return;
+        }
+        const key = await generateKey(password);
 
-      preventEditing();
-      if (direction === "encrypt") {
-        return encryptText(
-          inputText,
-          iv,
-          key,
-          document.getElementById("text-out")
-        ).then(() => allowEditing());
-      } else if (direction === "decrypt") {
-        decryptText(
-          inputText.trim(),
-          iv,
-          key,
-          document.getElementById("text-out")
-        ).then(() => allowEditing());
+        preventEditing();
+        if (direction === "encrypt") {
+          return encryptText(
+            inputText,
+            key,
+            document.getElementById("text-out")
+          ).then(() => allowEditing());
+        } else if (direction === "decrypt") {
+          decryptText(
+            inputText.trim(),
+            key,
+            document.getElementById("text-out")
+          ).then(() => allowEditing());
+        }
+      } catch (err) {
+        alert(`Whoops. Something went wrong. ${err}`);
       }
     }
 
@@ -208,15 +218,10 @@
     /**
      * Generate iv from password.
      * @param {string} password
-     * @returns {Promise} fulfils to Uint8Array
+     * @returns {Uint8Array}
      */
     function generateIv(password) {
-      return subtleCrypto
-        .digest("SHA-256", new TextEncoder().encode(password))
-        .then((digest) => {
-          const iv = new Uint8Array(digest.slice(0, 16));
-          return iv;
-        });
+      return window.crypto.getRandomValues(new Uint8Array(IV_BYTE_LEN));
     }
     /**
      * Generate crypto key from password
@@ -249,30 +254,19 @@
     }
 
     /**
-     * Look to see if input should be decoded. Leading and trailing whitespace
-     * is ignored. The remaining text must be valid base64.
-     * @param {string} inputText
-     * @returns {string} null if not to be decoded.
-     */
-    function extractTextToDecrypt(inputText) {
-      const matches = inputText.match(/\s*([A-Za-z0-9+/]+={0,2})\s*/);
-      return matches ? matches[1] : null;
-    }
-
-    /**
      * Encrypt text.
      * @param {string} inputText - text to encrypt
-     * @param {string} iv - initialisation vector
      * @param {string} key - encryption key
      * @param {Element} elementOut - output element
      * @returns {Promise} fulfils true if okay else false.
      */
-    async function encryptText(inputText, iv, key, elementOut) {
+    async function encryptText(inputText, key, elementOut) {
+      const iv = generateIv(password);
       const encoded = new TextEncoder().encode(inputText);
       return subtleCrypto
         .encrypt({ name: "AES-GCM", iv: iv }, key, encoded)
         .then((cipherText) => {
-          elementOut.value = uint8ArrayToBase64(new Uint8Array(cipherText));
+          elementOut.value = joinCipherAndIv(new Uint8Array(cipherText), iv);
           return true;
         })
         .catch((err) => {
@@ -284,16 +278,49 @@
     }
 
     /**
+     * Combine cipherText and iv
+     * @param {Uint8Array} cipherText
+     * @param {Uint8Array} iv
+     * @returns {string} base64 output text
+     */
+    function joinCipherAndIv(cipherText, iv) {
+      return (
+        uint8ArrayToBase64(cipherText) + IV_SEPARATOR + uint8ArrayToBase64(iv)
+      );
+    }
+
+    /**
+     * Separate cipherText and IV from the outputData.
+     * @param {string} outputData - base64 containing cipher text and IV.
+     * @returns {{cipherText:string, iv:string}}
+     */
+    function splitCombinedCipherAndIv(encryptedText) {
+      const parts = encryptedText.split(IV_SEPARATOR);
+      if (parts.length !== 2) {
+        return null;
+      }
+      const cipherText = base64ToBytes(parts[0]);
+      const iv = base64ToBytes(parts[1]);
+      if (!cipherText || !iv) {
+        return null;
+      }
+      return {
+        cipherText: cipherText,
+        iv: iv,
+      };
+    }
+
+    /**
      * Decrypt text.
      * @param {string} inputText - text to decrypt
-     * @param {string} iv
      * @param {string} key
      * @param {Element} elementOut - output element
      * @returns {Promise} fulfils true if okay else false.
      */
-    async function decryptText(inputText, iv, key, elementOut) {
-      const cipherText = base64ToBytes(inputText);
-      if (!cipherText) {
+    async function decryptText(inputText, key, elementOut) {
+      const cipherAndIv = splitCombinedCipherAndIv(inputText);
+      if (!cipherAndIv) {
+        alert(`Input text is corrupt and cannot be decrypted.`);
         return Promise.resolve(false);
       }
 
@@ -301,10 +328,10 @@
         .decrypt(
           {
             name: "AES-GCM",
-            iv: iv,
+            iv: cipherAndIv.iv,
           },
           key,
-          cipherText
+          cipherAndIv.cipherText
         )
         .then((decrypted) => {
           const decoded = new TextDecoder().decode(decrypted);
@@ -313,7 +340,7 @@
         })
         .catch((err) => {
           alert(
-            `Cannot decrypt text. The password or encrypted text may be invalid. ${err}`
+            `Cannot decrypt text. The password may be incorrect or the input text may be corrupt. ${err}`
           );
           return false;
         });
@@ -329,7 +356,7 @@
         const binString = atob(base64);
         return Uint8Array.from(binString, (m) => m.codePointAt(0));
       } catch (err) {
-        alert(`Input text does not appear to be correctly encrypted. ${err}`);
+        console.error(`Cannot decode base64. ${err}`);
         return null;
       }
     }
