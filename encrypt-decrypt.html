@@ -29,6 +29,7 @@
         font-family: Verdana, Geneva, Tahoma, sans-serif;
         font-size: calc(15px + 0.390625vw);
         box-sizing: border-box;
+        padding: 0px 1em 0px 1em;
       }
       h1 {
         text-align: center;
@@ -463,7 +464,7 @@
         .then((cipherText) => {
           const encryptedText = joinCipherAndIv(new Uint8Array(cipherText), iv);
           const preamble =
-            `The following encrypted text has been created using the encrypt-decrypt.html tool. ` +
+            `The following encrypted text has been created using the encrypt-decrypt.html tool available at https://henspace.github.io/encrypt-decrypt/\n\n` +
             `You will need the password ${
               additionalKeyDetails.key ? "and key file " : ""
             }to decrypt.`;
