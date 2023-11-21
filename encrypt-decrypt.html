@@ -27,22 +27,31 @@
       body {
         background-color: aliceblue;
         font-family: Verdana, Geneva, Tahoma, sans-serif;
+        font-size: calc(15px + 0.390625vw);
+        box-sizing: border-box;
+      }
+      h1 {
+        text-align: center;
       }
       textarea {
-        box-sizing: border-box;
-        height: 25vh;
+        font-size: 1rem;
+        height: 20vh;
+        resize: none;
         width: 100%;
       }
 
       input[type="password"] {
-        box-sizing: border-box;
+        font-size: 1rem;
         width: 100%;
       }
 
+      button {
+        font-size: 1rem;
+      }
       #button-bar {
         display: flex;
         justify-content: center;
-        padding: 1em;
+        padding: 0em;
       }
 
       .no-crypto textarea {
@@ -68,6 +77,19 @@
       label p {
         margin-bottom: 0px;
       }
+
+      .icon {
+        font-size: 2em;
+      }
+
+      p.warning {
+        padding-left: 3em;
+        text-indent: -3em;
+      }
+      p.warning::before {
+        content: "\26A0 \FE0F";
+        font-size: 2em;
+      }
     </style>
   </head>
 
@@ -81,11 +103,14 @@
       </p>
     </noscript>
     <div id="main-container" class="decrypting" style="display: none">
-      <p class="'disclaimer">
-        This page is for test purposes only. It is made available WITHOUT ANY
-        WARRANTY; without even the implied warranty of MERCHANTABILITY or
-        FITNESS FOR A PARTICULAR PURPOSE.
-      </p>
+      <div class="disclaimer">
+        <p class="warning">
+          This form is for test and proof of principle only. If you use the form
+          to encrypt sensitive data, you do so entirely at your own risk! The
+          form is made available WITHOUT ANY WARRANTY; without even the implied
+          warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+        </p>
+      </div>
       <div id="mode">
         <label>
           Encrypting:
@@ -266,24 +291,31 @@
      * Prevent editing
      */
     function preventEditing() {
+      document.getElementById("encrypting").disabled = true;
       document.getElementById("text-in").setAttribute("readonly", true);
       document.getElementById("password").setAttribute("readonly", true);
+      document.getElementById("key-file-selector").disabled = true;
       document.getElementById("encrypt-button").disabled = true;
       document.getElementById("decrypt-button").disabled = true;
+      document.getElementById("copy-button").disabled = true;
     }
 
     /**
      * Allow editing
      */
     function allowEditing() {
+      document.getElementById("encrypting").disabled = false;
       document.getElementById("text-in").removeAttribute("readonly");
       document.getElementById("password").removeAttribute("readonly");
+      document.getElementById("key-file-selector").disabled = false;
       document.getElementById("encrypt-button").disabled = false;
       document.getElementById("decrypt-button").disabled = false;
+      document.getElementById("copy-button").disabled = false;
     }
 
     /**
-     * Check if key valid.
+     * Check if password valid. The only constraints are a minimum length
+     * of MIN_PASSWORD_LEN and no leading or trailing spaces.
      * @param {string} password
      * @returns {boolean}
      */
