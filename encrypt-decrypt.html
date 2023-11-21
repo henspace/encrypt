@@ -468,7 +468,11 @@
             `You will need the password ${
               additionalKeyDetails.key ? "and key file " : ""
             }to decrypt.`;
-          elementOut.value = `${preamble}\n\n${encryptedText}`;
+          const startTag = "--- START ---";
+          const endTag = "---- END ----";
+          const postamble =
+            "To decrypt, just copy and paste everything into the encrypt-decrypt tool and select decrypt.";
+          elementOut.value = `${preamble}\n\n${startTag}\n${encryptedText}\n${endTag}\n\n${postamble}`;
           return true;
         })
         .then(() => {
