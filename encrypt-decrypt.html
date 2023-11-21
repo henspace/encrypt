@@ -227,6 +227,9 @@
       } else {
         subtleCrypto = window.crypto.subtle;
         document.getElementById("main-container").style.display = "block";
+        if (!navigator.clipboard) {
+          document.getElementById("copy-button").style.display = "none";
+        }
         const directionSelector = document.getElementById("encrypting");
         directionSelector.addEventListener("change", () => {
           document.getElementById("text-out").value = "";
@@ -622,10 +625,10 @@
       if (!result.value) {
         return;
       }
-      result.select();
-      result.setSelectionRange(0, 99999); // for mobile
-      navigator.clipboard.writeText(result.value);
-      alert("Result copied to clipboard.");
+      navigator.clipboard
+        .writeText(result.value)
+        .then(() => alert("Encrypted text copied to clipboard."))
+        .catch((err) => alert(`Unable to write to clipboard. ${err}`));
     }
   </script>
 </html>
