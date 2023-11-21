@@ -1,9 +1,24 @@
 <!DOCTYPE html>
+<!--
+    Encrypt-decrypt.html is a client side page to encrypt and decrypt text.
+    Copyright (C) 2023  Steve Butler at https://github.com/henspace
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>. 
+
+    For details see https://github.com/henspace/encrypt
+-->
 <html lang="en">
-  <script>
-    // Set ENCRYPTED_TEXT to default value to decrypt
-    var ENCRYPTED_TEXT;
-  </script>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,7 +34,7 @@
         width: 100%;
       }
 
-      #password {
+      input[type="password"] {
         box-sizing: border-box;
         width: 100%;
       }
@@ -33,6 +48,26 @@
       .no-crypto textarea {
         background-color: red;
       }
+
+      #main-container.decrypting .decrypt-only {
+        display: block;
+      }
+
+      #main-container.decrypting .encrypt-only {
+        display: none;
+      }
+
+      #main-container.encrypting .decrypt-only {
+        display: none;
+      }
+
+      #main-container.encrypting .encrypt-only {
+        display: block;
+      }
+
+      label p {
+        margin-bottom: 0px;
+      }
     </style>
   </head>
 
@@ -45,20 +80,27 @@
         browser.
       </p>
     </noscript>
-    <div id="main-container" style="display: none">
+    <div id="main-container" class="decrypting" style="display: none">
       <p class="'disclaimer">
         This page is for test purposes only. It is made available WITHOUT ANY
         WARRANTY; without even the implied warranty of MERCHANTABILITY or
         FITNESS FOR A PARTICULAR PURPOSE.
       </p>
+      <div id="mode">
+        <label>
+          Encrypting:
+          <input id="encrypting" type="checkbox" />
+        </label>
+      </div>
       <div id="input-area">
         <label>
-          Input text:
+          <p class="encrypt-only">Text to encrypt</p>
+          <p class="decrypt-only">Text to decrypt</p>
           <textarea
             id="text-in"
             rows="4"
             cols="50"
-            placeholder="Enter text to encrypt or encrypted text here."
+            placeholder="Enter text here."
           ></textarea>
         </label>
         <label>
@@ -69,38 +111,72 @@
             placeholder="Enter the password here."
           />
         </label>
+        <label>
+          Additional key from file:
+          <input
+            type="password"
+            id="additional-key"
+            readonly
+            placeholder="Optional key for additional security."
+          />
+        </label>
+        <input type="file" id="key-file-selector" />
       </div>
       <div id="button-bar">
-        <button id="encrypt-button" onclick="convert('encrypt');">
+        <button
+          id="encrypt-button"
+          class="encrypt-only"
+          onclick="convert('encrypt');"
+        >
           Encrypt
         </button>
-        <button id="decrypt-button" onclick="convert('decrypt');">
+        <button
+          id="decrypt-button"
+          class="decrypt-only"
+          onclick="convert('decrypt');"
+        >
           Decrypt
         </button>
       </div>
       <div id="output-area">
         <label>
-          Output text:
+          <p class="encrypt-only">Encrypted text</p>
+          <p class="decrypt-only">Decrypted text</p>
           <textarea
             id="text-out"
             readonly
             rows="4"
             cols="50"
-            placeholder="Encrypted or decrypted text appears here."
+            placeholder="Resulting text appears here."
           ></textarea>
         </label>
+        <button
+          id="copy-button"
+          class="encrypt-only"
+          onclick="copyResultToClipboard();"
+        >
+          Copy to clipboard
+        </button>
+        <p class="encrypt-only">
+          You can paste the above encrypted text into any document. You can also
+          surround it with with any explanatory text you wish so long as you
+          keep the encrypted text separated from any other surrounding text by
+          at least one space. If you include multiple encrypted sections, only
+          the first will be decrypted.
+        </p>
       </div>
     </div>
     <div id="footer">
       <p>
-        Encrypt-decrypt code available at
-        <a href="https://github.com/henspace/encrypt">Github</a>
+        For more details visit
+        <a href="https://github.com/henspace/encrypt-decrypt">Encrypt-decrypt</a
+        >.
       </p>
     </div>
   </body>
   <script>
     const IV_BYTE_LEN = 16;
-    const IV_SEPARATOR = "$";
+    const IV_SEPARATOR = "@"; // do not include regex special characters.
     const MIN_PASSWORD_LEN = 8;
     const SALT = "f85981d89406b6ef0bbe40846aeadb7e";
     var subtleCrypto;
@@ -124,13 +200,25 @@
         );
       } else {
         subtleCrypto = window.crypto.subtle;
-        if (ENCRYPTED_TEXT) {
-          const inputElement = document.getElementById("text-in");
-          inputElement.value = ENCRYPTED_TEXT;
-          inputElement.setAttribute("readonly", true);
-          document.getElementById("encrypt-button").disabled = true;
-        }
         document.getElementById("main-container").style.display = "block";
+        const directionSelector = document.getElementById("encrypting");
+        directionSelector.addEventListener("change", () => {
+          document.getElementById("text-out").value = "";
+          document.getElementById("main-container").className =
+            directionSelector.checked ? "encrypting" : "decrypting";
+        });
+        const keyFileSelector = document.getElementById("key-file-selector");
+        keyFileSelector.addEventListener("change", () => {
+          const additionalKeyElement =
+            document.getElementById("additional-key");
+          const file = keyFileSelector.files[0];
+          additionalKeyElement.value = "";
+          if (file) {
+            readBinaryFile(file).then((data) => {
+              additionalKeyElement.value = new TextDecoder().decode(data);
+            });
+          }
+        });
       }
     }
 
@@ -149,26 +237,23 @@
      * @param {string} direction - 'encrypt' or 'decrypt'
      */
     async function convert(direction) {
+      const encrypting = direction === "encrypt";
       try {
         document.getElementById("text-out").value = "";
         const inputText = document.getElementById("text-in").value;
-        const password = document.getElementById("password").value;
-        if (!inputText || !isPasswordValid(password)) {
+        if (!inputText) {
           return;
         }
-        const key = await generateKey(password);
 
         preventEditing();
-        if (direction === "encrypt") {
+        if (encrypting) {
           return encryptText(
             inputText,
-            key,
             document.getElementById("text-out")
           ).then(() => allowEditing());
-        } else if (direction === "decrypt") {
+        } else {
           decryptText(
             inputText.trim(),
-            key,
             document.getElementById("text-out")
           ).then(() => allowEditing());
         }
@@ -216,13 +301,72 @@
     }
 
     /**
-     * Generate iv from password.
-     * @param {string} password
+     * Generate iv.
      * @returns {Uint8Array}
      */
-    function generateIv(password) {
+    function generateIv() {
       return window.crypto.getRandomValues(new Uint8Array(IV_BYTE_LEN));
     }
+
+    /**
+     * Create a random password.
+     * @returns {string}
+     */
+    function generateRandomPassword() {
+      const data = window.crypto.getRandomValues(new Uint8Array(32));
+      return uint8ArrayToBase64(data);
+    }
+
+    /**
+     * Get the password.
+     * @returns {string} password if valid else null
+     */
+    function getValidPassword() {
+      const password = document.getElementById("password").value;
+      return isPasswordValid(password) ? password : null;
+    }
+
+    /**
+     * Get the additional key string.
+     * @param {boolean} create - if true, a random key is created if one has not been set.
+     * @returns {{key:string, created: boolean}} key contains the string. created is true if a new password was generated.
+     */
+    function getAdditionalKey(create) {
+      const additionalKeyElement = document.getElementById("additional-key");
+      const result = {
+        key: additionalKeyElement.value,
+        created: false,
+      };
+      if (
+        !result.key &&
+        create &&
+        confirm(
+          "Would you like to create an additional key for added security? " +
+            "This will result in an additional file that you will need to use along with the password."
+        )
+      ) {
+        result.key = generateRandomPassword();
+        result.created = true;
+      }
+      additionalKeyElement.value = result.key ?? "";
+      return result;
+    }
+
+    /**
+     * Read binary file
+     * @param {File} file
+     * @returns {Promise} fulfils to ArrayBuffer
+     */
+    function readBinaryFile(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.addEventListener("loadend", (event) => {
+          resolve(reader.result);
+        });
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
     /**
      * Generate crypto key from password
      * @param {string} password
@@ -247,34 +391,132 @@
               name: "AES-GCM",
               length: 256,
             },
-            false,
+            true,
             ["encrypt", "decrypt"]
           )
         );
     }
 
     /**
+     * Find the encrypted text within the input text.
+     * @param {string} inputText
+     * @returns {string} encrypted text or null if not found.
+     */
+    function extractTextToDecrypt(inputText) {
+      const base64RegexStr = "[a-zA-Z0-9+\/]{22,}={0,2}";
+      const regex = new RegExp(base64RegexStr + IV_SEPARATOR + base64RegexStr);
+      const match = inputText.match(regex);
+      return match ? match[0] : null;
+    }
+
+    /**
      * Encrypt text.
      * @param {string} inputText - text to encrypt
-     * @param {string} key - encryption key
      * @param {Element} elementOut - output element
      * @returns {Promise} fulfils true if okay else false.
      */
-    async function encryptText(inputText, key, elementOut) {
-      const iv = generateIv(password);
+    async function encryptText(inputText, elementOut) {
+      const password = getValidPassword();
+      if (!password) {
+        return;
+      }
+      const additionalKeyDetails = getAdditionalKey(true);
+      const extendedPassword = password + (additionalKeyDetails.key ?? "");
+      const iv = generateIv();
       const encoded = new TextEncoder().encode(inputText);
-      return subtleCrypto
-        .encrypt({ name: "AES-GCM", iv: iv }, key, encoded)
+      return generateKey(extendedPassword)
+        .then((key) =>
+          subtleCrypto.encrypt({ name: "AES-GCM", iv: iv }, key, encoded)
+        )
         .then((cipherText) => {
-          elementOut.value = joinCipherAndIv(new Uint8Array(cipherText), iv);
+          const encryptedText = joinCipherAndIv(new Uint8Array(cipherText), iv);
+          const preamble =
+            `The following encrypted text has been created using the encrypt-decrypt.html tool. ` +
+            `You will need the password ${
+              additionalKeyDetails.key ? "and key file " : ""
+            }to decrypt.`;
+          elementOut.value = `${preamble}\n\n${encryptedText}`;
+          return true;
+        })
+        .then(() => {
+          if (additionalKeyDetails.created) {
+            saveAdditionalKeyAsFile(additionalKeyDetails.key);
+          }
+          return true;
+        })
+        .catch((err) => {
+          alert(`Cannot encrypt text. ${err}`);
+          return false;
+        });
+    }
+
+    /**
+     * Decrypt text.
+     * @param {string} inputText - text to decrypt
+     * @param {string} key
+     * @param {Element} elementOut - output element
+     * @returns {Promise} fulfils true if okay else false.
+     */
+    async function decryptText(inputText, key, elementOut) {
+      const textToDecrypt = extractTextToDecrypt(inputText);
+      if (!textToDecrypt) {
+        alert("I could not find any encrypted text.");
+        return Promise.resolve(false);
+      }
+      const cipherAndIv = splitCombinedCipherAndIv(textToDecrypt);
+      if (!cipherAndIv) {
+        alert(`Input text is corrupt and cannot be decrypted.`);
+        return Promise.resolve(false);
+      }
+
+      const password = getValidPassword();
+      if (!password) {
+        return;
+      }
+      const additionalKeyDetails = getAdditionalKey(false);
+      const extendedPassword = password + (additionalKeyDetails.key ?? "");
+
+      return generateKey(extendedPassword)
+        .then((key) =>
+          subtleCrypto.decrypt(
+            {
+              name: "AES-GCM",
+              iv: cipherAndIv.iv,
+            },
+            key,
+            cipherAndIv.cipherText
+          )
+        )
+        .then((decrypted) => {
+          const decoded = new TextDecoder().decode(decrypted);
+          document.getElementById("text-out").value = decoded;
           return true;
         })
         .catch((err) => {
           alert(
-            `Cannot encrypt text. The password or encrypted text may be invalid. ${err}`
+            `Cannot decrypt text. The password or additional key may be incorrect or the input text may have been corrupted. ${err}`
           );
           return false;
         });
+    }
+    /**
+     * Save the key to file unless it is already loaded.
+     * @param {string} keyStr
+     * @returns {Promise} fulfils to true.
+     */
+    function saveAdditionalKeyAsFile(keyStr) {
+      alert(
+        "You must save the additional key to allow the data to be decrypted later. Only share the file containing the key with people you want to be able to decrypt the data."
+      );
+      const blob = new Blob([new TextEncoder().encode(keyStr)], {
+        type: "application/octet-stream",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "key.bin";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      return Promise.resolve(true);
     }
 
     /**
@@ -311,42 +553,6 @@
     }
 
     /**
-     * Decrypt text.
-     * @param {string} inputText - text to decrypt
-     * @param {string} key
-     * @param {Element} elementOut - output element
-     * @returns {Promise} fulfils true if okay else false.
-     */
-    async function decryptText(inputText, key, elementOut) {
-      const cipherAndIv = splitCombinedCipherAndIv(inputText);
-      if (!cipherAndIv) {
-        alert(`Input text is corrupt and cannot be decrypted.`);
-        return Promise.resolve(false);
-      }
-
-      return subtleCrypto
-        .decrypt(
-          {
-            name: "AES-GCM",
-            iv: cipherAndIv.iv,
-          },
-          key,
-          cipherAndIv.cipherText
-        )
-        .then((decrypted) => {
-          const decoded = new TextDecoder().decode(decrypted);
-          elementOut.value = decoded;
-          return true;
-        })
-        .catch((err) => {
-          alert(
-            `Cannot decrypt text. The password may be incorrect or the input text may be corrupt. ${err}`
-          );
-          return false;
-        });
-    }
-
-    /**
      * Convert base64 to array.
      * @param {string} base64
      * @returns {Uint8Array}
@@ -369,6 +575,20 @@
     function uint8ArrayToBase64(bytes) {
       const binString = String.fromCodePoint(...bytes);
       return btoa(binString);
+    }
+
+    /**
+     * Copy the result text area to the clipboard.
+     */
+    function copyResultToClipboard() {
+      const result = document.getElementById("text-out");
+      if (!result.value) {
+        return;
+      }
+      result.select();
+      result.setSelectionRange(0, 99999); // for mobile
+      navigator.clipboard.writeText(result.value);
+      alert("Result copied to clipboard.");
     }
   </script>
 </html>
