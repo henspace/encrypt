@@ -439,7 +439,7 @@
      * @returns {string} encrypted text or null if not found.
      */
     function extractTextToDecrypt(inputText) {
-      const base64RegexStr = "[a-zA-Z0-9+\/]{22,}={0,2}";
+      const base64RegexStr = "[a-zA-Z0-9+\/]{16,}={0,2}";
       const regex = new RegExp(base64RegexStr + IV_SEPARATOR + base64RegexStr);
       const match = inputText.match(regex);
       return match ? match[0] : null;
