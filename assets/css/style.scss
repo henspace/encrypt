@@ -1,0 +1,27 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+@media print, screen and (max-width: 720px) {
+  header .navigation {
+    padding: 0px;
+  }
+  header .navigation li {
+    display: inline-block;
+  }
+  header .navigation li::after {
+    content: "|";
+  }
+
+  header .navigation li:last-child::after {
+    content: none;
+  }
+}
+
+a,
+a:hover,
+a:focus,
+a:hover:focus {
+  text-decoration: underline;
+}

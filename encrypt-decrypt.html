@@ -95,7 +95,8 @@
   </head>
 
   <body>
-    <h1>Simple encryption and decryption</h1>
+    <h1>Encrypt-Decrypt</h1>
+    <h2>Simple text encryption and decryption</h2>
     <noscript>
       <p>
         Javascript must be enabled to use this form. If you are previewing the
@@ -195,7 +196,10 @@
     <div id="footer">
       <p>
         For more details visit
-        <a href="https://github.com/henspace/encrypt-decrypt">Encrypt-decrypt</a
+        <a
+          href="#"
+          onclick="redirectTo('https://henspace.github.io/encrypt-decrypt/index.html')"
+          >Encrypt-decrypt</a
         >.
       </p>
     </div>
@@ -378,7 +382,8 @@
         create &&
         confirm(
           "Would you like to create an additional key for added security? " +
-            "This will result in an additional file that you will need to use along with the password."
+            "This will result in an additional file that you will need to use along with the password. " +
+            "Click OK to create the additional file, or Cancel if you just want to use a password."
         )
       ) {
         result.key = generateRandomPassword();
@@ -546,7 +551,7 @@
      */
     function saveAdditionalKeyAsFile(keyStr) {
       alert(
-        "You must save the additional key to allow the data to be decrypted later. Only share the file containing the key with people you want to be able to decrypt the data."
+        "You MUST save the additional key to allow the data to be decrypted later. Only share the file containing the key with people you want to be able to decrypt the data."
       );
       const blob = new Blob([new TextEncoder().encode(keyStr)], {
         type: "application/octet-stream",
@@ -629,6 +634,28 @@
         .writeText(result.value)
         .then(() => alert("Encrypted text copied to clipboard."))
         .catch((err) => alert(`Unable to write to clipboard. ${err}`));
+    }
+
+    /**
+     * Redirect page to destination. If the domain or protocol is not the same
+     * as the current page, confirmation is required.
+     * This is primarily to warn the user if making a web connection from a
+     * local file.
+     */
+    function redirectTo(target) {
+      if (
+        window.location.protocol === "file" ||
+        window.location.hostname !== new URL(target).hostname
+      ) {
+        if (
+          !confirm(
+            `You are about to be redirected to ${target}. Click OK to continue.`
+          )
+        ) {
+          return;
+        }
+      }
+      window.location.replace(target);
     }
   </script>
 </html>
