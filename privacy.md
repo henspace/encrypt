@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 # Privacy
 
 The encrypt-decrypt form runs entirely client-side. Although it is available online, you can save the file locally and run without any internet connection at all. The file is entirely self-contained with no external dependencies.

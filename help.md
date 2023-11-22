@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 # Help using the encrypt-decrypt form
 
 ## ⚠️ Caution

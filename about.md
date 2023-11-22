@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 # About
 
 The encrypt-decrypt form is a simple encryption tool designed to simplify the encryption of text using the AES 256 algorithm. The code is open source, so feel free to check it out and see how it works.
